@@ -679,7 +679,7 @@ SpinalCord:	d=1.05 g/cm3;	n=9
 	+el: name=Potassium ; f=0.003
 
 # 66
-Spleen:	d=1.04 g/cm3;	n=9
+Spleen   :	d=1.04 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.103
 	+el: name=Carbon    ; f=0.113
 	+el: name=Nitrogen  ; f=0.032
@@ -710,7 +710,7 @@ StomachCont:	d=1.03 g/cm3;	n=4
 	+el: name=Oxygen    ; f=0.762
 
 # 69
-Thymus:	d=1.03 g/cm3;	n=9
+Thymus   :	d=1.03 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.105
 	+el: name=Carbon    ; f=0.256
 	+el: name=Nitrogen  ; f=0.027
@@ -722,7 +722,7 @@ Thymus:	d=1.03 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 70
-Thyroid:	d=1.01 g/cm3;	n=10
+Thyroid   :	d=1.01 g/cm3;	n=10
 	+el: name=Hydrogen  ; f=0.104
 	+el: name=Carbon    ; f=0.119
 	+el: name=Nitrogen  ; f=0.024
@@ -914,7 +914,7 @@ Testis:	d=1.05 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 86
-Ovary:	d=1.04 g/cm3;	n=9
+Ovary  :	d=1.04 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.105
 	+el: name=Carbon    ; f=0.093
 	+el: name=Nitrogen  ; f=0.024
@@ -962,7 +962,7 @@ UterineCont:	d=1.0 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 90
-Placenta:	d=1.03 g/cm3;	n=9
+Placenta   :	d=1.03 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.106
 	+el: name=Carbon    ; f=0.315
 	+el: name=Nitrogen  ; f=0.024
@@ -1022,7 +1022,7 @@ UmbilicalCord:	d=1.03 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 110
-FetalSoftTissue:	d=1.02 g/cm3;	n=9
+FetalSoftTissue :	d=1.02 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.104
 	+el: name=Carbon    ; f=0.103
 	+el: name=Nitrogen  ; f=0.024
@@ -1034,7 +1034,7 @@ FetalSoftTissue:	d=1.02 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 111
-FetalSkeleton:	d=1.42 g/cm3;	n=8
+FetalSkeleton  :	d=1.42 g/cm3;	n=8
 	+el: name=Hydrogen  ; f=0.042
 	+el: name=Carbon    ; f=0.16
 	+el: name=Nitrogen  ; f=0.045
@@ -1294,7 +1294,7 @@ FetusThymus:	d=1.0 g/cm3;	n=5
 	+el: name=Sulfur    ; f=0.001
 
 # 210
-TwinsSoftTissue:	d=1.02 g/cm3;	n=9
+TwinsSoftTissue :	d=1.02 g/cm3;	n=9
 	+el: name=Hydrogen  ; f=0.104
 	+el: name=Carbon    ; f=0.103
 	+el: name=Nitrogen  ; f=0.024
@@ -1306,7 +1306,7 @@ TwinsSoftTissue:	d=1.02 g/cm3;	n=9
 	+el: name=Potassium ; f=0.002
 
 # 211
-TwinsSkeleton:	d=1.42 g/cm3;	n=8
+TwinsSkeleton  :	d=1.42 g/cm3;	n=8
 	+el: name=Hydrogen  ; f=0.042
 	+el: name=Carbon    ; f=0.16
 	+el: name=Nitrogen  ; f=0.045

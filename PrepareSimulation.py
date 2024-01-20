@@ -8,16 +8,24 @@
     @contact    : 21211140001@m.fudan.edu.cn
     @Description：
 """
-import os
+import os; os.chdir("D:/MP/PSDoseCalculator")
 import SimpleITK as sitk
 import nibabel as nib
 import numpy as np
 
-from GATE import GateFileGenerate
-from ImageProcess.Image import ImageProcessor, AtlasProcessor
-from utils.ICRPReference import F18_bladder_cumulate_activity
-from utils import OrganDict
+# import GATEPythonScript as gps
+# from GATEPythonScript import GateFileGenerate
+# from ImageProcess.Image import ImageProcessor, AtlasProcessor
+# from utils.ICRPReference import F18_bladder_cumulate_activity
+# from utils import OrganDict
 
+
+def nii_to_hdr(fpath_nii, fpath_hdr):
+    # 使用nibabel将nii转换为hdr，以便GATE读取
+    assert os.path.exists(fpath_nii)
+    if not os.path.exists(fpath_hdr):
+        img_nib = nib.load(fpath_nii)
+        nib.save(img_nib, fpath_hdr)
 
 # ======================================================================================================================
 # Data File Generate
@@ -196,8 +204,7 @@ def prepare_simulation(pname, source_type, phantom_type, output, N=5E8, **kwargs
 
 
 if __name__ == "__main__":
-    os.chdir(r"E:\PETDose_dataset\Pediatric\AnonyP1S1_PETCT19659")
-    for organ in ["Heart", "Lung", "Brain", "Kidney", "Liver", "Others"]:
-        print(organ)
-        organ_source(organ=organ, fpath_atlas="Atlas.nii", fpath_pet="PET.nii", fpath_save=organ+".nii")
-    pass
+    os.makedirs("GATEPythonScript/data/case0", exist_ok=True)
+    # nii_to_hdr("temp/case0/atlas.nii", "GATEPythonScript/data/case0/atlas.hdr")
+    nii_to_hdr("temp/case0/CT.nii", "GATEPythonScript/data/case0/CT.hdr")
+    nii_to_hdr("temp/case0/PET.nii", "GATEPythonScript/data/case0/PET.hdr")

@@ -323,6 +323,7 @@ def create_mac_PETLike_AtlasLike(case, phantom, source, atlas=None, N=5E8, sim="
     w.source_pet_F18(img=source)
 
     w.application(N)
+    w.Write()
 
     return 0
 
@@ -412,4 +413,8 @@ def create_LabelRange_dat(tabel=os.path.join("info", "OrganComposition.xlsx"),
 
 
 if __name__ == "__main__":
-    create_mac_PETLike_CTLike(case="p1", phantom="CT", source="PET", atlas="Atlas", N=5E8, sim="s1")
+    os.chdir("GATEPythonScript")
+    # create_mac_PETLike_AtlasLike(case="case0", phantom="atlas", source="PET", N=5E8, sim="sim0")
+
+    create_OrganMaterials_db(tabel="utils/OrganComposition.xlsx", save_path="utils/OrganMaterials.db")
+    create_LabelRange_dat(tabel="utils/OrganComposition.xlsx", save_path="utils/LabelRange.dat")

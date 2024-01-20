@@ -1,9 +1,25 @@
+
+[Elements]
+Hydrogen:   S= H   ; Z=  1. ; A=  1.01   g/mole
+Carbon:     S= C   ; Z=  6. ; A=  12.01  g/mole
+Nitrogen:   S= N   ; Z=  7. ; A=  14.01  g/mole
+Oxygen:     S= O   ; Z=  8. ; A=  16.00  g/mole
+Sodium:     S= Na  ; Z= 11. ; A=  22.99  g/mole
+Magnesium:  S= Mg  ; Z= 12. ; A=  24.305 g/mole
+Phosphor:   S= P   ; Z= 15. ; A=  30.97  g/mole
+Sulfur:     S= S   ; Z= 16. ; A=  32.066 g/mole
+Chlorine:   S= Cl  ; Z= 17. ; A=  35.45  g/mole
+Potassium:  S= K   ; Z= 19. ; A=  39.098 g/mole
+Calcium:    S= Ca  ; Z= 20. ; A=  40.08  g/mole
+Iron:       S= Fe  ; Z= 26. ; A=  55.845 g/mole
+Iodine:     S= I   ; Z= 53. ; A=  126.90 g/mole
+
 [Materials]
 # Material corresponding to H=[ -1050;-950 ]
-Air_0: d=1.21 mg/cm3; n=3; 
-+el: name=Nitrogen; f=0.755
-+el: name=Oxygen; f=0.232
-+el: name=Argon; f=0.013
+Air_0: d=1.21 mg/cm3; n=3;
+    +el: name=Nitrogen; f=0.755
+    +el: name=Oxygen; f=0.232
+    +el: name=Argon; f=0.013
 
 # Material corresponding to H=[ -950;-852.884 ]
 Lung_1: d=102.695 mg/cm3; n=9; 
