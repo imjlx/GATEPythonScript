@@ -23,10 +23,11 @@ class MacWriter(object):
     """
     Gate Macro File Writer, write macro file for Gate Simulation.
     The file structure should be as follows:
+    - utils # Utility folder
     - data # Base folder
         - <case> # Case folder
             - CT.hdr, PET.hdr, ... # Input data files
-            - <sim> # Simulation folder
+            - <sim> # Simulation folder for each simulation
                 - main.mac # Generated macro file (recommended, can be changed in Write())
                 - output.mhd, ... # Dose output file
     """

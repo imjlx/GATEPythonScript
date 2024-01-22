@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import SimpleITK as sitk
 import multiprocessing as mp
+import tkinter as tk
+from tkinter import ttk
 
 # from utils import HardwareInfo
 from output import StatisticAnalyzer, FileMerger
@@ -158,24 +160,53 @@ class SimulationSupervisor(object):
                     self.n_per_run = int(float(line.strip().split()[-1]))
         assert self.n_per_run != 0, "No number of primary per run in macro file."
     
-    def display_in_command(self):
+    def generate_report(self):
+        
+        analyzers = [StatisticAnalyzer(fpath, self.n_per_run) for fpath in self.stats]
+        percents = [a.current_n / self.n_per_run for a in analyzers]
+        report = list()
+        report.append("==============================Simulation Supervision==============================")
+        report.append(f"Parallel: {self.parallel};\t Done: {sum(percents)/self.parallel:.2%}\t\t")
+        ctime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        report.append(f"Current Time: {ctime}")
+        report.append(f"Simulation Folder: {self.macros[0].split('/')[-4:-2]}")
+        report.append("==================================================================================")
+        report.append("{:10}{:12}{:25}".format("PERCENT", "SPEED(N/s)", "Finished Time"))
+
+        for i, a in enumerate(analyzers):
+            report.append(f"{percents[i]:<10.2%}{int(a.speed):<12}{a.final_time:25}")
+        
+        report = "\n".join(report)
+        
+        return report, percents
+
+    def display_in_command(self, refresh_time=3):
         percents = [0] * self.parallel
         while sum(percents) < self.parallel:
             os.system("cls")
-            analyzers = [StatisticAnalyzer(fpath, self.n_per_run) for fpath in self.stats]
-            percents[i] = a.current_n / self.n_per_run
-            print("==============================Simulation Supervision==============================")
-            print(f"Parallel: {self.parallel};\t Done: {sum(percents)/self.parallel:.2%}", end='\t\t')
-            ctime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            print(f"Current Time: {ctime}")
-            print(f"Simulation Folder: {self.macros[0].split('/')[-3:-1]}")
-            print("==================================================================================")
-            print("{:10}{:12}{:25}".format("PERCENT", "SPEED_AVE", "END_AVE"))
+            report, percents = self.generate_report()
+            print(report)
+            time.sleep(refresh_time)
+    
+    def display_in_tkinter(self, frame: tk.Frame, refresh_time=3, pbar_length=600):
 
-            for i, a in enumerate(analyzers):
-                print(f"{percents[i]:<10.2%}{int(a.speed):<12}{a.final_time:25}")
+        pbar = ttk.Progressbar(frame, orient=tk.HORIZONTAL, length=600, mode='determinate')
+        pbar.pack()
 
-            time.sleep(3)
+        report_frame = tk.Frame(frame)
+        report_frame.pack()
+        percents = [0] * self.parallel
+        while sum(percents) < self.parallel:
+            for widget in report_frame.winfo_children():
+                widget.destroy()
+            report, percents = self.generate_report()
+            tk.Label(report_frame, text=report, font=("Courier New", 12), justify=tk.LEFT
+                     ).pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+            pbar['value'] = sum(percents) / self.parallel * 100
+            time.sleep(refresh_time)
+        
+        tk.Label(report_frame, text="Simulation Finished!", font=("Courier New", 20), justify=tk.LEFT
+                     ).pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
 class ClusterMerger(object):
     def __init__(self, working_dir, sim_folder) -> None:
@@ -266,9 +297,9 @@ if __name__ == "__main__":
 
     # run_cluster("D:/MP/PSDoseCalculator_data", "data/case0/sim0", 4, log=True)
 
-    # s = SimulationSupervisor("D:/MP/PSDoseCalculator_data", "data/case0/sim0")
-    # s.display_in_command()
+    s = SimulationSupervisor("D:/MP/PSDoseCalculator_data", "data/case0/sim0")
+    s.display_in_command()
 
-    ClusterMerger("D:/MP/PSDoseCalculator_data", "data/case0/sim0")()
+    # ClusterMerger("D:/MP/PSDoseCalculator_data", "data/case0/sim0")()
+
     
-    pass
