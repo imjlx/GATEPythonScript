@@ -1,39 +1,85 @@
 #!/usr/bin/env python
 # encoding: utf-8
-"""
-    @File       : Cluster.py
-    @Time       : 2022/8/26 16:28
-    @Author     : Haoran Jia
-    @license    : Copyright(c) 2022 Haoran Jia. All rights reserved.
-    @contact    : 21211140001@m.fudan.edu.cn
-    @Description：分割main.mac文件
-"""
+
 import os
 import re
 import time
 import shutil
+import subprocess
 import SimpleITK as sitk
+import multiprocessing as mp
 
-from utils import HardwareInfo
-from GATE.OutputProcess import StatisticAnalyzer, FileMerger
+# from utils import HardwareInfo
+from output import StatisticAnalyzer, FileMerger
 
 
-# ======================================================================================================================
-# Split macro script
-# ======================================================================================================================
-def split_mac(origin_file_path, parallel: int):
-    # 将已经生成的mac文件进行分割, 全部的main文件保存在同名文件夹下
+# ======================================= Run Simulation =======================================
 
-    # 创建文件夹
-    mac_name = os.path.basename(origin_file_path)[:-4]
-    folder_path = os.path.join(os.path.dirname(origin_file_path), mac_name)
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
+def is_docker_engine_running(system: str = "Windows") -> bool:
+    """Check if docker engine is running.
+    Args:
+        system (str, optional): System type. Defaults to "Windows".
+    Returns:
+        bool: True if docker engine is running.
+    """
+    if system == "Windows":
+        try:
+            subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
 
-    # 读取原mac文件
-    with open(origin_file_path, "r") as f:
+def start_docker():
+    try:
+        # 尝试启动 Docker Desktop（根据您的 Docker Desktop 版本，路径可能不同）
+        subprocess.run("C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe", check=True)
+    except Exception as e:
+        print(f"启动 Docker 失败: {e}")
+
+def run_macro(working_dir, macro_dir, how='docker', **kwargs):
+    """Run macro file in docker.
+
+    Args:
+        working_dir (str): GATE working directory.
+        macro_dir (dir): Macro file directory in working directory.
+        how (str, optional): How to Run Gate. Defaults to 'docker'.
+    """
+    if how == 'docker':
+        while not is_docker_engine_running():
+            start_docker()
+            print("Docker is starting...")
+            time.sleep(5)
+        print("Docker is running.")
+
+        command = f"docker run -i --rm -e TZ=Asia/Shanghai -v {working_dir}:/APP opengatecollaboration/gate {macro_dir}"
+        print("Running command: ", command)
+        process = subprocess.run(command, shell=True, capture_output=True, text=True)
+        print("Process finished with code: ", process.returncode)
+        log = False if 'log' not in kwargs else kwargs['log']
+        if log:
+            with open(os.path.join(working_dir, macro_dir.replace('.mac', '.txt')), 'w') as f:
+                f.write(process.stdout)
+    else:
+        raise NotImplementedError
+
+# ======================================= Split Macro file =======================================
+
+def split_macro(macro_dir, parallel: int):
+    """Splic main.mac into several mac files (i.mac) into folder "main" for parallel simulation, 
+    which will store output files in folder "main/i"
+    Args:
+        origin_file (_type_): path of main.mac
+        parallel (int): number of parallel simulation
+    """
+    mac_name = os.path.basename(macro_dir)[:-4]
+    folder_path = os.path.join(os.path.dirname(macro_dir), mac_name)
+    if os.path.exists(folder_path):
+        shutil.rmtree(folder_path)
+    os.makedirs(folder_path)
+
+    with open(macro_dir, "r") as f:
         origin_lines = f.readlines()
-    # 获取基本信息
+    # Find the row of N, Stat, Dose, Region to modify
     row_N = -1
     row_stat = -1
     row_dose = -1
@@ -57,236 +103,172 @@ def split_mac(origin_file_path, parallel: int):
     else:
         region_path = None
 
-    # 循环生成子文件
+    # Generate i.mac files
     for i in range(1, parallel + 1):
-        # 复制原文件
+        output_folder = "/".join(stat_path[:-1]) + "/" + mac_name + f"/{i}/"
         lines = origin_lines.copy()
-        # 修改部分行
         lines[row_N] = f"/gate/application/setNumberOfPrimariesPerRun {int(N / parallel + 1)}\n"
-        lines[row_stat] = f"/gate/actor/stat/save {stat_path[0]}/{stat_path[1]}/cluster{i}/{stat_path[2]}\n"
-        lines[row_dose] = f"/gate/actor/dose3d/save {dose_path[0]}/{dose_path[1]}/cluster{i}/{dose_path[2]}\n"
+        lines[row_stat] = "/gate/actor/stat/save " + output_folder + f"{stat_path[-1]}\n"
+        lines[row_dose] = "/gate/actor/dose3d/save " + output_folder + f"{dose_path[-1]}\n"
         if region_path is not None:
-            lines[row_region] = f"/gate/actor/dose3d/outputDoseByRegions {region_path[0]}/{region_path[1]}/cluster{i}/{region_path[2]}\n"
+            lines[row_region] = "/gate/actor/dose3d/outputDoseByRegions " + output_folder + f"{region_path[-1]}\n"
 
         with open(os.path.join(folder_path, str(i) + ".mac"), 'w') as f:
             f.writelines(lines)
+        
+        if not os.path.exists(os.path.join(folder_path, str(i))):
+            os.makedirs(os.path.join(folder_path, str(i)), exist_ok=True)
 
-        # 创建output文件夹
-        out = os.path.join(stat_path[0], stat_path[1], "cluster" + str(i))
-        if not os.path.exists(out):
-            os.makedirs(out)
-    pass
+# ======================================= Run Simlation in cluster =======================================
 
-
-# ======================================================================================================================
-# Run simulation simultaneously (Have to run the function by main.py in terminal)
-# ======================================================================================================================
-
-def auto_cluster_parallel(pname: str, memory_percent: float = 0.8, CPU_core_left: int = 4) -> int:
-    if os.path.exists(os.path.join("data", pname, "CT.nii")):
-        ct_size = os.path.getsize(os.path.join("data", pname, "CT.nii"))
-    elif os.path.exists(os.path.join("data", pname, "Atlas.nii")):
-        ct_size = os.path.getsize(os.path.join("data", pname, "Atlas.nii"))
-    else:
-        raise FileExistsError("No file to calculate size")
-    ct_size = round(ct_size / 1E6, 1)
-    # memory
-    memory_per_process = 0.05 * ct_size  # Statistic regulation
-    N_memory_restriction = int((HardwareInfo.MEMORY * memory_percent - HardwareInfo.STATIC_MEMORY) / memory_per_process)
-    # CPU
-    N_CPU_restriction = HardwareInfo.CPU_CORE - CPU_core_left
-
-    # use the miner one
-    if N_CPU_restriction <= N_memory_restriction:
-        N_max = N_CPU_restriction
-    else:
-        N_max = N_memory_restriction
-
-    return N_max
-
-
-# "/home/pc/Desktop/PETDose"
-def run_cluster(mac_name, parallel, working_dir=HardwareInfo.WORKING_DIR):
-    # Call Cluster.split_mac to generate (or regenerate) cluster scripts
-    if os.path.exists(os.path.join("mac", mac_name)):
-        shutil.rmtree(os.path.join("mac", mac_name))
-    split_mac(origin_file_path=os.path.join("mac", mac_name + ".mac"), parallel=parallel)
+def run_cluster(working_dir, sim_folder: str, parallel: int, how='docker', **kwargs):
+    # First, split macro file
+    split_macro(f"{working_dir}/{sim_folder}/main.mac", parallel)
 
     # Run Simulation
+    ps = list()
     for i in range(1, parallel + 1):
-        os.system(f"""
-        gnome-terminal --working-directory {working_dir} --command 'bash -c "Gate mac/{mac_name}/{i}.mac"'
-        """)
-        # ; exec bash
-        time.sleep(0)
+        macro_dir = f"{sim_folder}/main/{str(i)}.mac"
+        ps.append(mp.Process(target=run_macro, args=(working_dir, macro_dir, how), kwargs=kwargs))
+        ps[-1].start()
 
+    print("All processes started.")
+    for p in ps:
+        p.join()
+    print("All processes finished.")
 
-def run_clusters(mac_names, output, parallel=0):
-    if mac_names == "all":
-        mac_names = [fname.split(".")[0] for fname in os.listdir("mac")]
-    else:
-        assert isinstance(mac_names, list)
+class SimulationSupervisor(object):
+    """
+    Supervise simulation processes based on the Statistic.txt file.
+    """
+    def __init__(self, working_dir: str, sim_folder: str) -> None:
+        self.macros = [os.path.join(working_dir, sim_folder, "main", fname).replace("\\", "/")
+              for fname in os.listdir(os.path.join(working_dir, sim_folder, "main")) if fname.endswith(".mac")]
+        self.parallel = len(self.macros)
 
-    for mac_name in mac_names:
-        print(mac_name)
-        if parallel == 0:
-            parallel = auto_cluster_parallel(mac_name, CPU_core_left=HardwareInfo.CPU_CORE_LEFT)
-        run_cluster(mac_name=mac_name, parallel=parallel)
-        # White for the Statistic.txt to generate.
-        time.sleep(600)
+        self.stats = [os.path.join(macro[:-4], "Statistic.txt") for macro in self.macros]
+        while sum([os.path.exists(fpath) for fpath in self.stats]) < self.parallel:
+            print("Waiting for the All Statistic.txt to generate...")
+            time.sleep(2)
 
-        # Get number of primary of each cluster from one .mac script.
-        N_cluster = 0
-        with open(os.path.join("mac", mac_name, "1.mac"), "r") as f:
+        self.n_per_run = 0
+        with open(self.macros[0], "r") as f:
             for line in f.readlines():
                 if re.match(pattern="/gate/application/setNumberOfPrimariesPerRun\\s", string=line):
-                    N_cluster = int(float(line.strip().split()[-1]))
-            assert N_cluster != 0
-        fpath_stats = [os.path.join(output, mac_name, "cluster" + str(i), "Statistic.txt") for i in range(1, parallel + 1)]
+                    self.n_per_run = int(float(line.strip().split()[-1]))
+        assert self.n_per_run != 0, "No number of primary per run in macro file."
+    
+    def display_in_command(self):
+        percents = [0] * self.parallel
+        while sum(percents) < self.parallel:
+            os.system("cls")
+            analyzers = [StatisticAnalyzer(fpath, self.n_per_run) for fpath in self.stats]
+            percents[i] = a.current_n / self.n_per_run
+            print("==============================Simulation Supervision==============================")
+            print(f"Parallel: {self.parallel};\t Done: {sum(percents)/self.parallel:.2%}", end='\t\t')
+            ctime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            print(f"Current Time: {ctime}")
+            print(f"Simulation Folder: {self.macros[0].split('/')[-3:-1]}")
+            print("==================================================================================")
+            print("{:10}{:12}{:25}".format("PERCENT", "SPEED_AVE", "END_AVE"))
 
-        MoveOn = False
-        while not MoveOn:
-            n_cluster = [StatisticAnalyzer(fpath).n for fpath in fpath_stats]
-            if sum(n_cluster) == N_cluster * parallel:
-                MoveOn = True
-                print("Next Patient: ", end=" ")
-            else:
-                print(f"Current Patient: {mac_name} still running...")
-                time.sleep(600)
+            for i, a in enumerate(analyzers):
+                print(f"{percents[i]:<10.2%}{int(a.speed):<12}{a.final_time:25}")
 
-
-# ======================================================================================================================
-# Supervise simulations
-# ======================================================================================================================
-def supervision(output, pname):
-    parallel = len(os.listdir(os.path.join("mac", pname)))
-
-    n_cluster = 0
-    with open(os.path.join("mac", pname, "1.mac"), "r") as f:
-        for line in f.readlines():
-            if re.match(pattern="/gate/application/setNumberOfPrimariesPerRun\\s", string=line):
-                n_cluster = int(float(line.strip().split()[-1]))
-        assert n_cluster != 0
-
-    fpath_stats = [os.path.join(output, pname, "cluster" + str(i), "Statistic.txt") for i in range(1, parallel + 1)]
-
-    RunStat = [0] * parallel
-    while sum(RunStat) < parallel:
-        stats = [StatisticAnalyzer(fpath) for fpath in fpath_stats]
-        print("==============================Simulation Supervision==============================")
-        print(f"Parallel: {parallel};\t Done: {sum(RunStat)}", end='\t\t')
-        ctime = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        print(f"Current Time: {ctime}")
-        print(pname)
-        print("==================================================================================")
-        print("{:10}{:12}{:25}".format("PERCENT", "SPEED_AVE", "END_AVE"))
-
-        for stat in stats:
-            end = stat.seconds_end_AvePred(N=n_cluster)
-            end = stat.time_output(end)
-            print(f"{stat.n / n_cluster:<10.2%}{int(stat.average_speed()):<12}{end:25}")
-        print()
-        time.sleep(600)
-
-
-# ======================================================================================================================
-# Merge Output
-# ======================================================================================================================
+            time.sleep(3)
 
 class ClusterMerger(object):
-    @staticmethod
-    def merge_Dose_Edep(folder_cluster, file_type) -> None:
-        """
+    def __init__(self, working_dir, sim_folder) -> None:
+        self.sim_dir = os.path.join(working_dir, sim_folder)
 
-        :param folder_cluster:
-        :param file_type:
-        :return:
-        """
-        doses = list()
-        squareds = list()
-        Ns = list()
-        for sub in os.listdir(folder_cluster):
-            folder_sub = os.path.join(folder_cluster, sub)
-            if os.path.isdir(folder_sub):
-                doses.append(os.path.join(folder_sub, "output-" + file_type + ".mhd"))
-                squareds.append(os.path.join(folder_sub, "output-" + file_type + "-Squared.mhd"))
-                Ns.append(StatisticAnalyzer(os.path.join(folder_sub, "Statistic.txt")).n)
+        self.folders = [os.path.join(self.sim_dir, "main", folder) 
+                        for folder in os.listdir(os.path.join(self.sim_dir, "main")) 
+                        if os.path.isdir(os.path.join(self.sim_dir, "main", folder))]
+        self.parallel = len(self.folders)
 
-        dose, squared, N, uncertainty = FileMerger.DoseOrEdep(doses, squareds, Ns)
+    def merge_Dose_Edep(self, file_type) -> None:
+        assert file_type in ["Dose", "Edep"], "file_type must be Dose or Edep"
 
-        sitk.WriteImage(dose, os.path.join(folder_cluster, file_type + ".nii"))
-        sitk.WriteImage(squared, os.path.join(folder_cluster, file_type + "Squared.nii"))
-        sitk.WriteImage(uncertainty, os.path.join(folder_cluster, file_type + "Uncertainty.nii"))
-        pass
+        doses = [os.path.join(folder, "output-" + file_type + ".mhd") for folder in self.folders]
+        squareds = [os.path.join(folder, "output-" + file_type + "-Squared.mhd") for folder in self.folders]
+        Ns = [StatisticAnalyzer(os.path.join(folder, "Statistic.txt")).current_n for folder in self.folders]
+        if not (all([os.path.exists(dose) for dose in doses]) and
+                all([os.path.exists(squared) for squared in squareds])):
+            print("File not found in at least one folder.")
+            return 0
 
-    @staticmethod
-    def merge_NOH(folder_cluster) -> None:
-        NOHs = list()
-        for sub in os.listdir(folder_cluster):
-            folder_sub = os.path.join(folder_cluster, sub)
-            if os.path.isdir(folder_sub):
-                NOHs.append(os.path.join(folder_sub, "output-NbOfHits.mhd"))
+        dose, squared, uncertainty = FileMerger.DoseOrEdep(doses, squareds, Ns)
+
+        sitk.WriteImage(dose, os.path.join(self.sim_dir, file_type + ".nii"))
+        sitk.WriteImage(squared, os.path.join(self.sim_dir, file_type + "Squared.nii"))
+        sitk.WriteImage(uncertainty, os.path.join(self.sim_dir, file_type + "Uncertainty.nii"))
+
+    def merge_NOH(self) -> None:
+        NOHs = [os.path.join(folder, "output-NbOfHits.mhd") for folder in self.folders]
+        if not all([os.path.exists(NOH) for NOH in NOHs]):
+            print("NbOfHits.mhd not found in at least one folder.")
+            return 0
         NOH = FileMerger.NumberOfHits(NOHs)
+        sitk.WriteImage(NOH, os.path.join(self.sim_dir, "NbOfHits.nii"))
 
-        sitk.WriteImage(NOH, os.path.join(folder_cluster, "NbOfHits.nii"))
-        pass
+    def merge_Stat(self) -> None:
+        fpath_list = [os.path.join(folder, "Statistic.txt") for folder in self.folders]
+        if not all([os.path.exists(fpath) for fpath in fpath_list]):
+            print("Statistic.txt not found in at least one folder.")
+            return 0
 
-    @staticmethod
-    def merge_Stat(folder_cluster) -> None:
-        fpath_list = list()
-        for sub in os.listdir(folder_cluster):
-            folder_sub = os.path.join(folder_cluster, sub)
-            if os.path.isdir(folder_sub):
-                fpath_list.append(os.path.join(folder_sub, "Statistic.txt"))
         stat = FileMerger.Statistic(fpath_list)
-
-        with open(os.path.join(folder_cluster, "MergeStatistic.txt"), 'w') as f:
+        with open(os.path.join(self.sim_dir, "MergeStatistic.txt"), 'w') as f:
             f.writelines(stat)
 
-    @staticmethod
-    def merge_DoseByRegion(folder_cluster):
-        fpath_list = list()
-        stat_list = list()
-        for sub in os.listdir(folder_cluster):
-            folder_sub = os.path.join(folder_cluster, sub)
-            if os.path.isdir(folder_sub):
-                fpath_list.append(os.path.join(folder_sub, "DoseByRegion.txt"))
-                stat_list.append(os.path.join(folder_sub, "Statistic.txt"))
+    def merge_DoseByRegion(self) -> None:
+        fpath_list = [os.path.join(folder, "DoseByRegion.txt") for folder in self.folders]
+        stat_list = [os.path.join(folder, "Statistic.txt") for folder in self.folders]
+        if not (all([os.path.exists(fpath) for fpath in fpath_list]) and 
+                all([os.path.exists(fpath) for fpath in stat_list])):
+            print("DoseByRegion not found in at least one folder.")
+            return 0
 
         DoseByRegion = FileMerger.DoseByRegion(fpath_list, stat_list)
-
-        with open(os.path.join(folder_cluster, "DoseByRegion.txt"), 'w') as f:
+        with open(os.path.join(self.sim_dir, "DoseByRegion.txt"), 'w') as f:
             f.writelines(DoseByRegion)
 
-    @staticmethod
-    def merge_output(folder_cluster, remerge=True):
-        if (remerge is False) and os.path.exists(os.path.join(folder_cluster, "DoseUncertainty.nii")):
-            pass
-        else:
-            ClusterMerger.merge_Dose_Edep(folder_cluster, "Dose")
+    def __call__(self, remerge=True):
 
-        if (remerge is False) and os.path.exists(os.path.join(folder_cluster, "EdepUncertainty.nii")):
+        if (remerge is False) and os.path.exists(os.path.join(self.sim_dir, "DoseUncertainty.nii")):
             pass
         else:
-            ClusterMerger.merge_Dose_Edep(folder_cluster, "Edep")
+            self.merge_Dose_Edep("Dose")
 
-        if (remerge is False) and os.path.exists(os.path.join(folder_cluster, "NbOfHits.nii")):
+        if (remerge is False) and os.path.exists(os.path.join(self.sim_dir, "EdepUncertainty.nii")):
             pass
         else:
-            ClusterMerger.merge_NOH(folder_cluster)
+            self.merge_Dose_Edep("Edep")
 
-        if (remerge is False) and os.path.exists(os.path.join(folder_cluster, "MergeStatistic.txt")):
+        if (remerge is False) and os.path.exists(os.path.join(self.sim_dir, "NbOfHits.nii")):
             pass
         else:
-            ClusterMerger.merge_Stat(folder_cluster)
+            self.merge_NOH()
 
-        if (remerge is False) and os.path.exists(os.path.join(folder_cluster, "DoseByRegion.txt")):
+        if (remerge is False) and os.path.exists(os.path.join(self.sim_dir, "MergeStatistic.txt")):
             pass
         else:
-            ClusterMerger.merge_DoseByRegion(folder_cluster)
+            self.merge_Stat()
+
+        if (remerge is False) and os.path.exists(os.path.join(self.sim_dir, "DoseByRegion.txt")):
+            pass
+        else:
+            self.merge_DoseByRegion()
 
 
 if __name__ == "__main__":
-    os.chdir(os.path.dirname(os.getcwd()))
+    # split_macro(r"D:\MP\PSDoseCalculator_data\data\case0\sim0\main.mac", 4)
 
+    # run_cluster("D:/MP/PSDoseCalculator_data", "data/case0/sim0", 4, log=True)
+
+    # s = SimulationSupervisor("D:/MP/PSDoseCalculator_data", "data/case0/sim0")
+    # s.display_in_command()
+
+    ClusterMerger("D:/MP/PSDoseCalculator_data", "data/case0/sim0")()
+    
     pass

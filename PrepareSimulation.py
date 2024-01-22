@@ -22,65 +22,12 @@ import numpy as np
 
 def nii_to_hdr(fpath_nii, fpath_hdr):
     # 使用nibabel将nii转换为hdr，以便GATE读取
-    assert os.path.exists(fpath_nii)
-    if not os.path.exists(fpath_hdr):
-        img_nib = nib.load(fpath_nii)
-        nib.save(img_nib, fpath_hdr)
+    img_nib = nib.load(fpath_nii)
+    nib.save(img_nib, fpath_hdr)
 
 # ======================================================================================================================
 # Data File Generate
 # ======================================================================================================================
-
-def ICRP_F18PET_source(fpath_atlas, fpath_save, age):
-    """
-    根据ICRP128号报告的器官累计活度，生成对应的活度源
-    :param age: 患者的年龄
-    :param fpath_save: 保存nii文件的路径
-    :param fpath_atlas: 分割文件的路径
-    :return:
-    """
-    # 读取分割
-    seg: np.ndarray = sitk.GetArrayFromImage(sitk.ReadImage(fpath_atlas))
-
-    # 指定剂量器官ID，填补其中空缺
-    ID_specific = [18, 26, 33, 32, 15]
-    for ID in ID_specific:
-        if ID in OrganDict.MultipleOrgans:
-            for ID_sub in OrganDict.MultipleOrgans[ID]:
-                seg[seg == ID_sub] = ID
-
-    # 将其他器官均设为body 10
-    ID_ignore = [x for x in OrganDict.OrganID if (x not in ID_specific and x != 10)]
-    for ID in ID_ignore:
-        seg[seg == ID] = 10
-
-    # 根据年龄获取膀胱的ICRP值
-    bladder_activity = F18_bladder_cumulate_activity(age)
-
-    # source为生成的源
-    source = np.zeros_like(seg, dtype=float)
-    # 赋值
-    for ID, ICRP_value in zip([18, 26, 33, 32, 15, 10], [0.21, 0.11, 0.079, 0.13, bladder_activity, 1.7]):
-        mask = seg.copy()
-        mask[mask != ID] = 0
-        mask[mask == ID] = 1
-        if mask.sum() == 0:
-            print(f"{fpath_atlas} misses organ {ID}")
-            source[seg == ID] = 0
-        else:
-            source[seg == ID] = ICRP_value * 10E6 / mask.sum()
-
-    # 保存图像文件
-    source = sitk.GetImageFromArray(source)
-    source.CopyInformation(sitk.ReadImage(fpath_atlas))
-    source = sitk.Cast(source, sitk.sitkFloat32)
-    sitk.WriteImage(source, fpath_save)
-
-    # 转换为hdr
-    source_nib = nib.load(fpath_save)
-    nib.save(source_nib, fpath_save[:-4] + ".hdr")
-
-    return 0
 
 
 def organ_source(organ, fpath_atlas, fpath_pet, fpath_save):
