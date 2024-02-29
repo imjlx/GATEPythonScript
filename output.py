@@ -98,7 +98,7 @@ class FileMerger(object):
     """
     @staticmethod
     def DoseOrEdep(value_list: List[str], squared_list: List[str], N_list: List[int]
-                   ) -> Tuple[sitk.Image, sitk.Image, int, sitk.Image]:
+                ) -> Tuple[sitk.Image, sitk.Image, int, sitk.Image]:
         value_list = [sitk.ReadImage(fname) for fname in value_list]
         squared_list = [sitk.ReadImage(fname) for fname in squared_list]
 
